@@ -70,7 +70,40 @@ lookup_address:
                     nullable: true
                     description: County or district name.
                     example: "Santa Clara County"
+      '422':
+        description: The address is empty or only whitespace. Nominatim is not called.
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+            example:
+              error_code: "VALIDATION_ERROR"
+              message: "Request validation failed"
+              validation_errors:
+                - field: "query.address"
+                  issue: "address must not be blank"
+                  value: "   "
+      '502':
+        description: The geocoding service (Nominatim) returned an error
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+            example:
+              error_code: "GEOCODING_FAILED"
+              message: "Geocoding service error: HTTP Error 503: Service Unavailable"
       '504':
         description: Geocoding service timed out
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+            example:
+              error_code: "GEOCODING_TIMEOUT"
+              message: "Geocoding service timed out for address: '100 Main St, Santa Cruz, CA'"
       '500':
         description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"

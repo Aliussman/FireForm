@@ -1,191 +1,144 @@
 # Template & Configuration schemas
 
-TemplateSummary:
+Template:
   type: object
+  required:
+    - id
+    - name
+    - description
+    - pdf_path
+    - fields
   properties:
-    template_id:
+    id:
       type: integer
-    form_type:
+    name:
       type: string
-      description: Unique form type identifier (built-in or custom jurisdiction)
-    display_name:
+    description:
       type: string
-    jurisdiction:
+      description: Free-text description, also passed to the LLM as context when filling
+    pdf_path:
       type: string
-      nullable: true
-      description: Jurisdiction code (e.g. "US-Federal", "US-CA", "US-GA")
-    agency_type:
-      type: string
-      nullable: true
-    version:
-      type: string
-    last_updated:
-      type: string
-      format: date
+      description: Project-relative path of the template PDF
+      example: "data/inputs/ics_209.pdf"
+    fields:
+      $ref: "#/TemplateFields"
     field_count:
       type: integer
-    status:
-      type: string
-      enum:
-        - active
-        - legacy
-        - draft
+      nullable: true
+      description: Number of fields in `fields`, or of fillable widgets in the PDF
+        when `fields` is empty. Null if the PDF could not be read.
+
+TemplateFields:
+  type: object
+  description: |
+    The template's field dictionary. Either a flat map of field name to field
+    type (e.g. `{"incident_name": "string"}`), or, when extracted from the PDF,
+    `{"schema": <JSON Schema>, "tables": [...], "groups": [...]}`. Empty when
+    nothing has been defined or extracted.
+  additionalProperties: true
 
 CreateTemplateRequest:
   type: object
   required:
-    - form_type
-    - display_name
-    - fields
+    - name
+    - pdf_path
   properties:
-    form_type:
+    name:
       type: string
-      description: Unique form type identifier
-    display_name:
+    description:
       type: string
-    jurisdiction:
+      default: ""
+    pdf_path:
       type: string
-      nullable: true
-      description: Jurisdiction code. Optional — the visual editor may register a
-        template before jurisdiction is assigned.
-    agency_type:
-      type: string
-      nullable: true
+      description: Project-relative path of a PDF already stored in the project,
+        usually the `pdf_path` returned by POST /api/v1/templates/upload
     fields:
-      type: array
-      items:
-        $ref: "#/TemplateField"
-    source_standard:
-      type: string
-      nullable: true
-      description: Reference to the source standard (e.g. "NERIS v2.0", "NFIRS 5.0")
-    pdf_template_ref:
-      type: string
-      nullable: true
-      description: Reference to the PDF template file the layout coordinates apply to
+      allOf:
+        - $ref: "#/TemplateFields"
+      default: {}
+      description: Field dictionary. Leave empty to extract it from the PDF.
 
-Template:
-  allOf:
-    - type: object
-      properties:
-        template_id:
-          type: integer
-        version:
-          type: string
-        last_updated:
-          type: string
-          format: date
-        field_count:
-          type: integer
-        status:
-          type: string
-          enum: [active, legacy, draft]
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-    - $ref: "#/CreateTemplateRequest"
-
-TemplateField:
+UpdateTemplateRequest:
   type: object
-  required:
-    - field_name
-    - field_type
-    - required
+  description: Only the keys sent are changed.
   properties:
-    field_name:
+    name:
       type: string
-      description: Field identifier within this template
-    field_type:
-      type: string
-      enum:
-        - string
-        - integer
-        - number
-        - boolean
-        - date
-        - datetime
-        - time
-        - enum
-        - text
-        - array
-      description: Data type of the field
-    required:
-      type: boolean
+      nullable: true
     description:
       type: string
       nullable: true
-    max_length:
+    fields:
+      allOf:
+        - $ref: "#/TemplateFields"
+      nullable: true
+
+ExtractedField:
+  type: object
+  required:
+    - name
+  properties:
+    name:
+      type: string
+      description: Field name; table columns are named `<table>.<column>`
+    description:
+      type: string
+      default: ""
+    type:
+      type: string
+      default: "string"
+
+TemplateUploadResponse:
+  type: object
+  required:
+    - filename
+    - pdf_path
+  properties:
+    filename:
+      type: string
+      description: Name the PDF was stored under (a timestamp is added on a name clash)
+    pdf_path:
+      type: string
+      description: Project-relative path to send to POST /api/v1/templates/create
+    field_count:
       type: integer
       nullable: true
-    min_value:
-      type: number
-      nullable: true
-    max_value:
-      type: number
-      nullable: true
-    allowed_values:
+      description: Number of fields found. Null if the PDF could not be read.
+    fields:
       type: array
       items:
-        type: string
+        $ref: "#/ExtractedField"
+    schema_data:
+      type: object
       nullable: true
-      description: Valid values for enum fields
-    static_text:
-      type: string
+      additionalProperties: true
+      description: JSON Schema extracted from the PDF, when extraction succeeded
+    tables:
+      type: array
       nullable: true
-      description: |
-        Fixed text drawn into the field instead of an LLM-extracted value. Null
-        for a field whose value comes from the transcript at fill time.
-    layout:
-      nullable: true
-      description: Visual placement of the field on the PDF. Null for fields with
-        no fixed position.
-      allOf:
-        - $ref: "#/TemplateFieldLayout"
+      items:
+        type: object
+        additionalProperties: true
+      description: Tables detected in the PDF, when extraction succeeded
 
-TemplateFieldLayout:
+MakeFillableRequest:
   type: object
-  description: |
-    Visual placement of a field on the PDF page. Coordinates are in PDF points
-    with the origin at the bottom-left of the page, so the field box runs from
-    start = (x, y) to end = (x + width, y + height). The editor is responsible
-    for converting rendered-canvas pixels to PDF points before saving.
   required:
-    - page
-    - x
-    - y
-    - width
-    - height
+    - pdf_path
   properties:
-    page:
+    pdf_path:
+      type: string
+      description: Project-relative path of the stored PDF to make fillable
+
+MakeFillableResponse:
+  type: object
+  required:
+    - pdf_path
+  properties:
+    pdf_path:
+      type: string
+      description: Project-relative path of the new fillable copy
+    field_count:
       type: integer
-      description: Zero-based page index
-    x:
-      type: number
-      description: Lower-left X of the box, in PDF points
-    y:
-      type: number
-      description: Lower-left Y of the box, in PDF points (origin bottom-left)
-    width:
-      type: number
-    height:
-      type: number
-    font:
-      type: string
-      default: Helvetica
-    font_size:
-      type: number
-      default: 10
-    color:
-      type: string
-      default: "#000000"
-      description: Hex color, e.g. "#000000"
-    align:
-      type: string
-      enum:
-        - left
-        - center
-        - right
-      default: left
+      nullable: true
+      description: Number of fillable widgets in the new copy

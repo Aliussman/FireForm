@@ -27,6 +27,30 @@ ErrorResponse:
       items:
         $ref: "#/ValidationError"
 
+HTTPErrorDetail:
+  type: object
+  description: |
+    Error body of routes that raise FastAPI's HTTPException instead of an
+    AppError (some template and profile routes).
+  required:
+    - detail
+  properties:
+    detail:
+      type: string
+      example: "Template not found"
+
+StatusMessage:
+  type: object
+  required:
+    - status
+    - message
+  properties:
+    status:
+      type: string
+      example: "success"
+    message:
+      type: string
+
 ValidationError:
   type: object
   properties:

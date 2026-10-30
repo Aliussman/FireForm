@@ -2,9 +2,10 @@
 
 FormFillRequest:
   type: object
+  description: Send either input_id or input_text. When both are sent,
+    input_text is used.
   required:
     - template_id
-    - input_id
   properties:
     template_id:
       type: integer
@@ -12,9 +13,15 @@ FormFillRequest:
     input_id:
       type: string
       format: uuid
+      nullable: true
       description: ID of a stored input (see POST /input/text, POST /input/voice)
         whose transcript is used to fill this template. The input must have
         status "ready".
+    input_text:
+      type: string
+      nullable: true
+      description: Narrative to fill from directly. If input_id is not sent, it
+        is stored as a new text input before filling.
     provider:
       allOf:
         - $ref: "enums.yaml#/LLMProvider"
@@ -44,6 +51,11 @@ FormFillResponse:
     output_pdf_path:
       type: string
       description: Path to the filled PDF output file
+    values:
+      type: object
+      nullable: true
+      additionalProperties: true
+      description: Extracted field values, when returned
 
 AsyncFormFillRequest:
   type: object
@@ -97,3 +109,98 @@ AsyncFormFillResponse:
           poll_url:
             type: string
             description: Path to poll via GET /api/v1/jobs/{job_id}
+    error:
+      type: string
+      nullable: true
+      description: Present only on a partial failure (HTTP 207), saying which
+        template could not be queued
+
+ModelsResponse:
+  type: object
+  required:
+    - models
+    - default
+  properties:
+    models:
+      type: array
+      items:
+        type: string
+      description: Models available in the local Ollama instance
+    default:
+      type: string
+      description: The configured default model
+
+TranscriptionResponse:
+  type: object
+  required:
+    - text
+  properties:
+    text:
+      type: string
+
+Submission:
+  type: object
+  required:
+    - id
+    - template_id
+    - template_name
+    - output_pdf_path
+  properties:
+    id:
+      type: integer
+    template_id:
+      type: integer
+    template_name:
+      type: string
+      description: Name of the template, or "Unknown Template" if it no longer exists
+    input_text:
+      type: string
+      nullable: true
+    output_pdf_path:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+      nullable: true
+
+SubmissionAnalytics:
+  type: object
+  required:
+    - total_submissions
+    - by_template
+    - by_date
+    - common_terms
+  properties:
+    total_submissions:
+      type: integer
+    by_template:
+      type: array
+      description: Submission count per template, most used first
+      items:
+        type: object
+        properties:
+          template_name:
+            type: string
+          count:
+            type: integer
+    by_date:
+      type: array
+      description: Submission count per day, oldest first
+      items:
+        type: object
+        properties:
+          date:
+            type: string
+            format: date
+          count:
+            type: integer
+    common_terms:
+      type: array
+      description: The 12 most common words in the narratives, stop words removed
+      items:
+        type: object
+        properties:
+          word:
+            type: string
+          count:
+            type: integer

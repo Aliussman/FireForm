@@ -103,6 +103,32 @@ forecast:
                     items:
                       type: number
       '422':
-        description: Validation error (e.g. coordinates out of range, invalid date format)
+        description: >
+          Validation error (coordinates out of range, a date not in YYYY-MM-DD
+          format, or end_date before start_date). Open-Meteo is not called.
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+            example:
+              error_code: "VALIDATION_ERROR"
+              message: "Request validation failed"
+              validation_errors:
+                - field: "query.latitude"
+                  issue: "Input should be less than or equal to 90"
+                  value: "200"
+      '502':
+        description: Open-Meteo returned an error or could not be reached
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+            example:
+              error_code: "WEATHER_FETCH_FAILED"
+              message: "failed to request 'https://api.open-meteo.com/v1/forecast': ..."
       '500':
         description: Internal server error
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"

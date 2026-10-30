@@ -75,5 +75,5 @@ job_by_id:
             schema:
               $ref: "../schemas/common.yaml#/ErrorResponse"
             example:
-              error_code: "JOB_NOT_FOUND"
-              message: "Job with ID 550e8400-e29b-41d4-a716-446655440099 not found"
+              error_code: "NOT_FOUND"
+              message: "Job not found"

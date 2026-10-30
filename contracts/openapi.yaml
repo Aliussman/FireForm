@@ -11,7 +11,7 @@ info:
     email: chetan250204@gmail.com
 
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:8000
     description: Local FireForm instance (default)
 
 tags:
@@ -29,6 +29,8 @@ tags:
     description: Weather forecast lookup via external API
   - name: zipcode
     description: Address and postal code geocoding via external API
+  - name: profiles
+    description: Profile of the person filling forms
 
 paths:
   # ── Layer 1: Input ──────────────────────────────────────────────
@@ -44,16 +46,32 @@ paths:
     $ref: "path/forms.yaml#/fill"
   /api/v1/forms/jobs:
     $ref: "path/forms.yaml#/async_fill"
+  /api/v1/forms/models:
+    $ref: "path/forms.yaml#/models"
+  /api/v1/forms/transcribe:
+    $ref: "path/forms.yaml#/transcribe"
+  /api/v1/forms/submissions:
+    $ref: "path/forms.yaml#/submissions"
+  /api/v1/forms/submissions/analytics:
+    $ref: "path/forms.yaml#/submissions_analytics"
+  /api/v1/forms/purge:
+    $ref: "path/forms.yaml#/purge"
+  /api/v1/forms/{submission_id}:
+    $ref: "path/forms.yaml#/submission_by_id"
 
   # ── Layer 6: Templates & Configuration ─────────────────────────
   /api/v1/templates:
     $ref: "path/templates.yaml#/templates"
+  /api/v1/templates/upload:
+    $ref: "path/templates.yaml#/templates_upload"
+  /api/v1/templates/preview:
+    $ref: "path/templates.yaml#/templates_preview"
+  /api/v1/templates/create:
+    $ref: "path/templates.yaml#/templates_create"
+  /api/v1/templates/make-fillable:
+    $ref: "path/templates.yaml#/templates_make_fillable"
   /api/v1/templates/{template_id}:
     $ref: "path/templates.yaml#/template_by_id"
-  /api/v1/templates/{template_id}/fields:
-    $ref: "path/templates.yaml#/template_fields"
-  /api/v1/templates/pdf:
-    $ref: "path/templates.yaml#/templates_pdf"
 
   # ── Layer 7: System ────────────────────────────────────────────
   /api/v1/health:
@@ -88,3 +106,20 @@ paths:
     $ref: "path/weather.yaml#/forecast"
   /api/v1/zipcode/lookup-address:
     $ref: "path/zipcode.yaml#/lookup_address"
+
+  # ── Profiles ───────────────────────────────────────────────────
+  /api/v1/profiles/:
+    $ref: "path/profiles.yaml#/profiles"
+  /api/v1/profiles/{profile_id}:
+    $ref: "path/profiles.yaml#/profile_by_id"
+
+components:
+  securitySchemes:
+    # Only enforced when FIREFORM_API_KEY is set; either scheme is accepted.
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    BearerAuth:
+      type: http
+      scheme: bearer

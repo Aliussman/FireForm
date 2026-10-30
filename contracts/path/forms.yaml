@@ -1,6 +1,12 @@
 # Layer 3 Form Fill Endpoints
-# POST /api/v1/forms/fill
-# POST /api/v1/forms/jobs
+# POST   /api/v1/forms/fill
+# POST   /api/v1/forms/jobs
+# GET    /api/v1/forms/models
+# POST   /api/v1/forms/transcribe
+# GET    /api/v1/forms/submissions
+# GET    /api/v1/forms/submissions/analytics
+# POST   /api/v1/forms/purge
+# DELETE /api/v1/forms/{submission_id}
 
 fill:
   post:
@@ -12,6 +18,10 @@ fill:
       the chosen LLM to get values back field-by-field, then draws those
       values into the template's PDF boxes. Runs synchronously: one LLM pass
       per call. The referenced input must have status "ready".
+
+      Instead of `input_id`, the narrative can be sent directly as
+      `input_text`; without an `input_id` it is stored as a new text input
+      first.
     tags:
       - forms
     requestBody:
@@ -58,7 +68,9 @@ fill:
               detail:
                 status: "transcribing"
       "422":
-        description: The provider or model is not one GET /system/llm/models lists
+        description: Neither input_id nor input_text was sent (VALIDATION_ERROR),
+          or the provider or model is not one GET /system/llm/models lists
+          (LLM_NOT_AVAILABLE)
         content:
           application/json:
             schema:
@@ -163,3 +175,270 @@ async_fill:
             example:
               error_code: "LLM_NOT_AVAILABLE"
               message: "gemini does not offer gemini-x. Pick one GET /system/llm/models lists."
+      "503":
+        description: The task queue (broker) could not be reached, so no job was queued
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+            example:
+              error_code: "QUEUE_UNAVAILABLE"
+              message: "Could not queue fill job for template 3: Error 111 connecting to redis:6379."
+              retry_after_seconds: 30
+      "207":
+        description: Some jobs were queued before the broker became unreachable.
+          `jobs` lists the queued ones and `error` says which template failed.
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/form-record.yaml#/AsyncFormFillResponse"
+
+models:
+  get:
+    operationId: listFillModels
+    summary: List Ollama models for the Fill Form model picker
+    description: |
+      Lists the models pulled in the local Ollama instance, with the
+      configured default first if it isn't pulled yet. If Ollama can't be
+      reached, returns just the default. For every provider, see
+      GET /api/v1/system/llm/models.
+    tags:
+      - forms
+    responses:
+      "200":
+        description: Available models and the default
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/form-record.yaml#/ModelsResponse"
+            example:
+              models: ["qwen2.5:3b", "llama3.1:latest"]
+              default: "qwen2.5:3b"
+
+transcribe:
+  post:
+    operationId: transcribeAudio
+    summary: Transcribe a short recording to text
+    description: |
+      Forwards recorded audio to the local Whisper service and returns the
+      text. Used by the Fill Form microphone button. The audio is not stored.
+      For stored voice inputs with async transcription, use POST /input/voice.
+    tags:
+      - forms
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required:
+              - audio
+            properties:
+              audio:
+                type: string
+                format: binary
+                description: Recorded audio (e.g. webm, wav). Max 500 MB.
+    responses:
+      "200":
+        description: Transcribed text
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/form-record.yaml#/TranscriptionResponse"
+            example:
+              text: "Structure fire on Main Street, two engines on scene."
+      "413":
+        description: Audio exceeds the 500 MB limit
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+            example:
+              error_code: "FILE_TOO_LARGE"
+              message: "Audio file exceeds maximum size of 500MB"
+              detail:
+                max_size_bytes: 524288000
+                received_size_bytes: 524288001
+      "502":
+        description: Whisper returned an error
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+            example:
+              error_code: "TRANSCRIPTION_FAILED"
+              message: "Transcription failed: 500 Server Error: Internal Server Error for url: http://whisper:9000/asr"
+      "503":
+        description: Whisper can't be reached
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+            example:
+              error_code: "STT_UNAVAILABLE"
+              message: "Could not connect to the speech-to-text service at http://whisper:9000/asr. Please ensure the whisper service is running."
+              retry_after_seconds: 30
+
+submissions:
+  get:
+    operationId: listSubmissions
+    summary: List filled form submissions
+    description: Returns every form submission with the name of its template.
+    tags:
+      - forms
+    responses:
+      "200":
+        description: List of submissions
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "../schemas/form-record.yaml#/Submission"
+            example:
+              - id: 12
+                template_id: 3
+                template_name: "ICS 209 Incident Status Summary"
+                input_text: "Structure fire on Main Street, two engines on scene."
+                output_pdf_path: "data/inputs/ics_209_20261030_101500_filled.pdf"
+                created_at: "2026-10-30T10:15:00"
+
+submissions_analytics:
+  get:
+    operationId: getSubmissionAnalytics
+    summary: Summary statistics over all submissions
+    description: |
+      Counts submissions in total, per template and per day, and lists the 12
+      most common words in the narratives (stop words removed).
+    tags:
+      - forms
+    responses:
+      "200":
+        description: Submission analytics
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/form-record.yaml#/SubmissionAnalytics"
+            example:
+              total_submissions: 3
+              by_template:
+                - template_name: "ICS 209 Incident Status Summary"
+                  count: 2
+                - template_name: "Manual Test Template"
+                  count: 1
+              by_date:
+                - date: "2026-10-29"
+                  count: 1
+                - date: "2026-10-30"
+                  count: 2
+              common_terms:
+                - word: "fire"
+                  count: 3
+                - word: "engine"
+                  count: 2
+
+purge:
+  post:
+    operationId: purgeSubmissions
+    summary: Delete submissions older than a retention window
+    description: |
+      Deletes every submission created before now minus `days` (defaults to
+      the configured retention period), together with its output PDF.
+
+      Requires the API key when `FIREFORM_API_KEY` is set.
+    tags:
+      - forms
+    security:
+      - ApiKeyHeader: []
+      - BearerAuth: []
+    parameters:
+      - name: days
+        in: query
+        required: false
+        description: Retention window in days. Defaults to the configured retention period.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 3650
+    responses:
+      "200":
+        description: Old submissions deleted
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+                - purged_count
+                - retention_days_used
+              properties:
+                status:
+                  type: string
+                purged_count:
+                  type: integer
+                retention_days_used:
+                  type: integer
+            example:
+              status: "success"
+              purged_count: 4
+              retention_days_used: 30
+      "401":
+        description: Missing or wrong API key
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+            example:
+              error_code: "UNAUTHORIZED"
+              message: "Unauthorized"
+      "422":
+        description: days is outside 1-3650
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+
+submission_by_id:
+  delete:
+    operationId: deleteSubmission
+    summary: Delete one submission and its output PDF
+    description: Requires the API key when `FIREFORM_API_KEY` is set.
+    tags:
+      - forms
+    security:
+      - ApiKeyHeader: []
+      - BearerAuth: []
+    parameters:
+      - name: submission_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    responses:
+      "200":
+        description: Submission deleted
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/StatusMessage"
+            example:
+              status: "success"
+              message: "Submission and associated output file deleted"
+      "401":
+        description: Missing or wrong API key
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+            example:
+              error_code: "UNAUTHORIZED"
+              message: "Unauthorized"
+      "404":
+        description: Submission not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+            example:
+              error_code: "SUBMISSION_NOT_FOUND"
+              message: "Submission not found"

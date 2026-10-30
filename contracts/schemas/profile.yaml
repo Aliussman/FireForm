@@ -1,0 +1,68 @@
+# Form filler profile schemas
+
+CreateProfileRequest:
+  type: object
+  required:
+    - name
+    - profession
+    - role
+  properties:
+    name:
+      type: string
+      description: Name of the person filling the form
+    profession:
+      type: string
+      description: Profession of the person
+    role:
+      type: string
+      description: Role of the person
+    description:
+      type: string
+      nullable: true
+      description: Optional profile description
+    custom_fields:
+      type: object
+      nullable: true
+      additionalProperties: true
+      default: {}
+      description: Extensible fields
+
+UpdateProfileRequest:
+  type: object
+  description: Only the keys sent are changed.
+  properties:
+    name:
+      type: string
+      nullable: true
+    profession:
+      type: string
+      nullable: true
+    role:
+      type: string
+      nullable: true
+    description:
+      type: string
+      nullable: true
+    custom_fields:
+      type: object
+      nullable: true
+      additionalProperties: true
+
+Profile:
+  allOf:
+    - $ref: "#/CreateProfileRequest"
+    - type: object
+      required:
+        - profile_id
+        - created_at
+        - updated_at
+      properties:
+        profile_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

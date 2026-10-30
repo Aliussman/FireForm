@@ -1,0 +1,132 @@
+# Form Filler Profiles
+# GET   /api/v1/profiles/
+# POST  /api/v1/profiles/
+# GET   /api/v1/profiles/{profile_id}
+# PATCH /api/v1/profiles/{profile_id}
+
+profiles:
+  get:
+    operationId: getCurrentProfile
+    summary: Get the current form filler profile
+    description: |
+      Returns the most recently updated profile, or `null` if none has been
+      created yet.
+    tags:
+      - profiles
+    responses:
+      "200":
+        description: The current profile, or null
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "../schemas/profile.yaml#/Profile"
+              nullable: true
+            example:
+              profile_id: "550e8400-e29b-41d4-a716-446655440077"
+              name: "Jane Smith"
+              profession: "Firefighter"
+              role: "Captain"
+              description: "Station 12, B shift"
+              custom_fields:
+                badge_number: "4471"
+              created_at: "2026-10-20T09:00:00Z"
+              updated_at: "2026-10-28T16:30:00Z"
+
+  post:
+    operationId: createProfile
+    summary: Create a form filler profile
+    tags:
+      - profiles
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/profile.yaml#/CreateProfileRequest"
+          example:
+            name: "Jane Smith"
+            profession: "Firefighter"
+            role: "Captain"
+            description: "Station 12, B shift"
+            custom_fields:
+              badge_number: "4471"
+    responses:
+      "201":
+        description: Profile created
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/profile.yaml#/Profile"
+      "422":
+        description: Request body failed validation
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/ErrorResponse"
+
+profile_by_id:
+  get:
+    operationId: getProfile
+    summary: Get a profile by ID
+    tags:
+      - profiles
+    parameters:
+      - name: profile_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      "200":
+        description: The profile
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/profile.yaml#/Profile"
+      "404":
+        description: Profile not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/HTTPErrorDetail"
+            example:
+              detail: "Profile not found"
+
+  patch:
+    operationId: updateProfile
+    summary: Update a profile
+    description: Partial update. Only the keys sent are changed.
+    tags:
+      - profiles
+    parameters:
+      - name: profile_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/profile.yaml#/UpdateProfileRequest"
+          example:
+            role: "Battalion Chief"
+    responses:
+      "200":
+        description: Profile updated
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/profile.yaml#/Profile"
+      "404":
+        description: Profile not found
+        content:
+          application/json:
+            schema:
+              $ref: "../schemas/common.yaml#/HTTPErrorDetail"
+            example:
+              detail: "Profile not found"
